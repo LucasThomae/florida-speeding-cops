@@ -1,0 +1,305 @@
+---
+title: "Using R to Interview the Speeding Cops Data"
+author: "Lucas Thomae"
+date: '2023-02-27'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+library(tidyverse)
+```
+
+```{r}
+#reading in data using readxl package
+speedingcops <- readxl::read_xlsx("speeding-cops.xlsx")
+speedingcops
+```
+
+
+## 1. What time period does this data cover? What is the oldest date, the newest date, and the number of days in between?
+
+```{r}
+#creating objects 'newest' and 'oldest' that contain the max and min of the date variable
+newest <- max(speedingcops$date)
+oldest <- min(speedingcops$date)
+
+oldest
+newest
+#using difftime function to determine number of days in between those dates
+difftime(newest, oldest)
+```
+
+The data covers transponder records from Oct. 25, 2010 to Dec. 13, 2011.
+
+## 2. How many trips are included in this data?
+
+```{r}
+#using nrow() to count the number of rows in the dataframe
+nrow(speedingcops)
+```
+
+72,858 trips are included in the data.
+
+## 3. How many cars are in this data?
+
+```{r}
+#using unique() to remove all duplicate values in the transponder column and using length() to count the remaining values
+length(unique(speedingcops$transponder))
+```
+
+There are 334 cars in the data.
+
+## 4. How many police agencies are included in this data?
+
+```{r}
+#using unique() to remove all duplicate values in the agency column and using length() to count the remaining values
+length(unique(speedingcops$agency))
+```
+
+There are 11 agencies in the data.
+
+## 5. What was the fastest trip in this data?
+
+```{r}
+#filtering the data so that we are only left with the row that contains the max value in the mph column
+speedingcops %>%
+  filter(mph == max(speedingcops$mph))
+```
+
+The fastest trip in the data was taken by a Florida Highway Patrol car on Aug. 25, 2011 that was clocked at 129.8 mph.
+
+## 6. What was the longest trip in this data that averaged a speed of at least 90 mph?
+
+```{r}
+#filtering the data so that we are left with only trips that were 90 mph or more and putting it in an object called 'over90'
+over90 <- speedingcops %>%
+  filter(mph > 90)
+
+#filtering over90 so that we are only left with the row that contains the max value in the miles column
+over90 %>% filter(miles == max(over90$miles))
+```
+
+The two longest trips by distance were both 53.5 miles, from Fort Pierce to West Palm Beach. The trip taken on April 9, 2011 took one minute longer than the trip on Sept. 5, 2011.
+
+## 7. What was the average speed of each car? Which was the highest?
+
+```{r}
+#making a new dataframe called 'averagespeed' -- grouping the data by transponder and using summarise() to take the average mph of each
+averagespeed <- speedingcops %>%
+  group_by(agency, transponder) %>%
+  summarise("average_speed" = mean(mph))
+
+#arranging that new dataframe in descending order
+arrange(averagespeed, desc(average_speed))
+```
+
+The highest average speed belonged to a Florida Highway patrol car that averaged 90.2 mph.
+
+## 8. How many trips over 90 mph did each car have? Which was the highest?
+
+```{r}
+#making a new dataframe called 'nover90' -- filtering to only include rows with mph greater than 90, grouping the data by agency and transponder and using summarise() to count the occurrences for each
+nover90 <- speedingcops %>%
+  filter(mph > 90) %>%
+  group_by(agency, transponder) %>%
+  summarise(trips_over_90 = n())
+
+#arranging that new dataframe in descending order
+arrange(nover90, desc(trips_over_90))
+```
+
+One car in particular, belonging to the Miami PD, recorded 489 trips over 90 mph — 339 more than the second biggest offender.
+
+## 9. How many unique transponders/cars does each agency have? Which agency has the most?
+
+```{r}
+#making a new dataframe called 'agencycars' -- grouping data by agency and using summarize() to count unique transponder values for each agency
+agencycars <- speedingcops %>%
+  group_by(agency) %>%
+  summarize(n_transponder = length(unique(transponder)))
+
+#arranging that new dataframe in descending order
+arrange(agencycars, desc(n_transponder))
+```
+
+The Florida Highway Patrol has the most cars of any other agency with 101 vehicles.
+
+## 10. How many trips over 90 mph did each police agency have? Which had the most?
+
+```{r}
+#making a new dataframe called 'agencyover90' -- filtering to only include trips over 90 mph, grouping data by agency and using summarize() to count occurrences for each agency
+agencyover90 <- speedingcops %>%
+  filter(mph > 90) %>%
+  group_by(agency) %>%
+  summarize(trips_over_90 = n())
+
+#arranging that new dataframe in descending order
+arrange(agencyover90, desc(trips_over_90))
+```
+
+The Miami PD had the most trips over 90 mph with 1,824. 
+
+## 11. What was the average speed of all the trips taken by each agency? Which agency had the highest average speed?
+
+```{r}
+#making a new dataframe called 'agencyspeed' -- grouping data by agency and using summarize() to calculate the average speed for each
+agencyspeed <- speedingcops %>%
+  group_by(agency) %>%
+  summarize(average_speed = mean(mph))
+
+#arranging that new dataframe in descending order
+arrange(agencyspeed, desc(average_speed))
+```
+
+The Plantation Police had the highest average speed, averaging 81.7 mph per trip.
+
+## 12. How many total miles did cars for each agency travel at speeds of at least 90 mph? Which agency had the most miles at 90 mph or above?
+
+```{r}
+#making a new dataframe called 'agencymiles' -- filtering to only include trips over 90 mph, grouping data by agency and using summarize() to tally the total miles for each
+agencymiles <- speedingcops %>%
+  filter(mph > 90) %>%
+  group_by(agency) %>%
+  summarize(miles_over_90 = sum(miles))
+
+#arranging that new dataframe in descending order
+arrange(agencymiles, desc(miles_over_90))
+```
+
+The Miami PD recorded the most miles over 90 mph with 13,361.7.
+
+## 13. What proportion of all the trips in this data was at speeds of at least 90 mph?
+
+```{r}
+#filtering the data to only include trips over 90 mph and counting the rows using nrow() -- putting that value in an object called 'n90'
+n90 <- speedingcops %>% filter(mph > 90) %>% nrow()
+
+#dividing that value by the total number of rows in the data
+n90 / nrow(speedingcops)
+```
+
+.061 of all the trips in the trips in the data had speeds of at least 90 mph.
+
+## 14. For each police agency, what percentage of their trips were above 90 mph?
+
+```{r}
+#making a new dataframe called 'tripsover90' -- filtering to only include trips over 90 mph, grouping data by agency and using summarize() to count the number of occurrences
+tripsover90 <- speedingcops %>%
+  filter(mph > 90) %>%
+  group_by(agency) %>%
+  summarize(trips_over_90 = n())
+
+#making a new dataframe called 'totaltrips' -- grouping data by agency and using summarize() to count the number of occurrences
+totaltrips <- speedingcops %>%
+  group_by(agency) %>%
+  summarize(total_trips = n())
+
+#joining the two dataframes and using summarize() to create a column to determine percentage of trips above 90 mph for each agency
+inner_join(tripsover90, totaltrips, by="agency") %>%
+  summarize(
+    agency = agency,
+    percentage_over_90 = 100*(trips_over_90/total_trips))
+```
+
+## 15. What was the average speed on each day of the week?
+
+```{r}
+#creating a vector called 'days' to make labels for days of the week
+days = c('Monday','Tuesday','Wednesday','Thursday','Friday','Saturday', 'Sunday')
+
+#creating a new column called 'day' that uses weekdays() to convert date variable into days of the week
+speedingcops$day <- weekdays(speedingcops$date)
+
+#grouping data by day, using summarize() to calculate mean speed for each day of the week, and using slice() to put labels in the correct order
+speedingcops %>%
+  group_by(day) %>%
+  summarize(average_speed = mean(mph)) %>%
+  slice(match(days, day))
+```
+
+## 16. How many trips above 90 mph happened on each day of the week?
+
+```{r}
+speedingcops %>%
+  filter(mph > 90) %>% #filtering data to only include rows over 90 mph
+  group_by(day) %>% #grouping by day variable
+  summarize(trips_over_90 = n()) %>% #using summarize() to count occurrences
+  slice(match(days, day)) #using slice to put lables in correct order
+```
+
+## 17. How many trips were made in each of the following ranges? 65-79, 80-89, 90-99, 100-109, 110-119, 120 or greater?
+
+```{r}
+#creating a vector called 'ranges' to make labels for speed ranges
+ranges <- c("65-79", "80-89", "90-99", "100-109", "110-119", "120+")
+
+#using mutate() to create a new column called 'speed_range' that turns mph into a categorical variable
+speedingcops <- speedingcops %>%
+  mutate(speed_range = case_when(
+    mph >= 65 & mph < 80 ~ "65-79",
+    mph >= 80 & mph < 90 ~ "80-89",
+    mph >= 90 & mph < 100 ~ "90-99",
+    mph >= 100 & mph < 110 ~ "100-109",
+    mph >= 110 & mph < 120 ~ "110-119",
+    mph >= 120 ~ "120+"
+  ))
+
+#grouping data by speed_range, using summarize() to count occurrences, and using slice() to put labels in the correct order
+speedingcops %>%
+  group_by(speed_range) %>%
+  summarize(trips = n()) %>%
+  slice(match(ranges, speed_range))
+```
+
+## 18. Did "cops drive the fastest from late at night to 6 a.m.," or was there another time of day when "cops drove the fastest"?
+
+```{r}
+#turning start_time into a new variable called 'time' in an hms format and then into a character variable
+speedingcops$time <- format(speedingcops$start_time, format = "%H:%M:%S") %>%
+  as.character()
+
+#removing the colons from the time variable values and turning it numeric
+#our new time variable should now be represented by numerals in an HHMMSS format
+speedingcops$time <- gsub(":", "", speedingcops$time) %>%
+  as.numeric()
+
+#using mutate to make a new variable that categorizes the time variable into four distinct categories
+speedingcops <- speedingcops %>%
+  mutate(time_of_day = case_when(
+    time >= 0 & time < 60000 ~ "late at night",
+    time >= 60000 & time < 120000 ~ "morning",
+    time >= 120000 & time < 180000 ~ "afternoon",
+    time >= 180000 & time <= 240000 ~ "evening"
+  ))
+
+#making labels for our categories (in the correct order)
+labels <- c("morning", "afternoon", "evening", "late at night")
+
+#grouping speeding cops by our new time_of_day variable and taking the mean mph for each
+speedingcops %>%
+  group_by(time_of_day) %>%
+  summarize(average_speed = mean(mph)) %>%
+#this puts the rows in the correct order
+  slice(match(labels, time_of_day))
+```
+
+Cops drove significantly faster late at night (between midnight and 6 a.m.), averaging over 81 mph.
+
+## 19. Were there any "regular routes" on which officers drove at least 90 mph? (2 points)
+
+```{r}
+speedingcops %>%
+  filter(mph > 90) %>% #filtering speedingcops to mph greater than 90
+  group_by(from, to) %>% #grouping by from and to variables (these are our routes)
+  summarize(trips_over_90 = n()) %>% #counting number of trips over 90 mph for each route
+  arrange(desc(trips_over_90)) #putting in descending order
+```
+
+The most common routes on which police drove over 90 mph were from SR874 South to Homestead SB, 57th Ave to 42nd Ave, and 42nd Ave to 57th Ave.
+
+## Story Lede:
+
+Part of a police agency's job is to protect the roads, but a Times' investigation shows that local police agencies consistently break speeding laws.
+
+An analysis of police vehicle transponder data showed that the Miami PD was the most egregious offender among 11 local agencies, tallying 1,824 instances of trips over 90 miles per hour during a 441-day period from Oct. 2010 to Dec. 2011.
